@@ -6,8 +6,12 @@ window.addEventListener("load", (() => {
 	const canvas = document.getElementById("editor");
 	const ctx = document.getElementById("editor").getContext('2d');
 
+	console.log("ctx.font: ", ctx.font);
+
 	canvas.width = canvas.clientWidth;
 	canvas.height = canvas.clientHeight;
+
+	ctx.font = "Bold 21px Arial";
 
 	engine = new Engine(canvas, ctx);
 
@@ -27,12 +31,10 @@ window.addEventListener("load", (() => {
 
 			// Show FPS
 			if (currentTick != lastTick) {
-				setTimeout(() => {
-					// console.log(`[-] FPS: ${Math.round(fps)}`);
-					// ctx.clearRect(0, 0, canvas.width, canvas.height);
-					ctx.font = "14px Bold Arial";
-					ctx.fillText("Debug information: FPS = " + Math.round(fps), 10, 20);
-				}, 1000);
+				// console.log(`[-] FPS: ${Math.round(fps)}`);
+				// ctx.clearRect(0, 0, canvas.width, canvas.height);
+				// ctx.font = "bold 14px Arial";
+				// ctx.fillText("Debug information: FPS = " + Math.round(fps), 10, 20);
 			}
 		}
 	}
@@ -43,10 +45,16 @@ window.addEventListener("load", (() => {
 let isBold = false;
 let stringPos = 0;
 
+let selection = [ 0, 0 ];
+let selectionArr = new Array();
+let doSelection = false;
+selectionStart = 0;
+
 class Engine {
 	constructor(canvas, ctx) {
 		this.canvas = canvas;
 		this.ctx = ctx;
+
 		this.initEventHandlers();
 		this.line_height = 20;
 		this.margin = 96;
@@ -57,18 +65,30 @@ class Engine {
 		this.active_string = "";
 		this.messages = [];
 	}
+
 	initEventHandlers() {
 		document.addEventListener('click', (event) => {
 			console.log("[-] initEventHandlers, event.clientY: " + event.clientY);
 			this.active_string_pos = Math.floor(event.clientY / (this.line_height + this.margin));
 			console.log(`[-] initEventHandlers, click Event, active_string_pos: ${this.active_string_pos}`);
 			this.pos = this.clickPos(event.offsetX - this.margin, event.offsetY + this.margin) - this.active_string.length;
+			if (doSelection) {
+				doSelection = false;
+				selectionArr = [];
+			} else {
+				doSelection = true;
+			}
+			if (doSelection) { 
+                selectionStart = this.clickPos(event.offsetX - this.margin, event.offsetY + this.margin) - this.active_string.length;
+            }
 			console.log(`[-] initEventHandlers, pos: ${this.pos}`);
 		});
 
 		document.addEventListener('mousemove', (event) => {
 			if (event.target === this.canvas) {
 				document.body.style.cursor = 'text';
+
+				if (doSelection) this.textSelection(event.offsetX - this.margin, event.offsetY + this.margin);
 			}
 		});
 
@@ -157,13 +177,12 @@ class Engine {
 			h: h
 		}
 
-		if (message.text.length) {
+		if (message.text.length) {;
+			this.ctx.font = (message.isBold ? "bold " : "") + message.fontSize + " " + message["font-family"];
 			if (!this.ctxs.includes(this.ctx)) {
-				// console.log("message.text: ", message.fontSize);
-				this.ctx.font = message.fontSize + " " + (message.isBold ? " Bold " : "") + message["font-family"];
 				this.ctxs[this.ctx] = this.ctx;
 			} else {
-				this.ctx.font = this.ctxs[this.ctx].font;
+				this.ctx.font = this.ctxs[ctx];
 			} 
             const textWidth = this.GetWidth(message.text);
             const textHeight = this.GetHeight(this.ctx, message.text);
@@ -174,6 +193,19 @@ class Engine {
             	w: textWidth,
             	h: textHeight
             }
+
+	        if (doSelection) {
+	        	for (let el in selectionArr) {
+                	console.log("i = " + " [ " + selectionArr[el].start + ", " + selectionArr[el].end + " ] ");
+                	console.log("y = " + selectionArr[el].y);
+                	const selection = [ selectionArr[el].start, selectionArr[el].end ];
+                	try {
+                		this.drawSelection(m_Destination.y, m_textDestination.x, selectionArr[el].y, selection);
+                	} catch (e) {
+                		console.log("Error: " + e);
+                	}
+            	}
+	        }
 
 			this.ctx.fillText(message.text, m_textDestination.x, m_textDestination.y);
 
@@ -200,6 +232,43 @@ class Engine {
 	        }
         }
 	}
+
+	drawSelection(y, x, yPos, selection) 
+    {
+    	console.log("yPos: ", yPos);
+
+        const selectionString = this.strings.find(x => x.pos === stringPos && x.y === yPos).text;
+
+        console.log("selectionString: ", selectionString);
+
+        const text = selectionString.substr(selection[0] + selectionString.length - 1);
+
+        const selectionText = text.substr(0, selection[1] + text.length);
+        const selectionOffsetText = selectionString.substr(0, selection[0] + selectionString.length - 1);
+
+        let selectionWidth, selectionHeight, selectionOffset;
+
+        selectionWidth = this.GetWidth(selectionText);
+        selectionHeight = this.GetHeight(this.ctx, selectionText);
+        
+        selectionOffset = this.GetWidth(selectionOffsetText);
+
+        const rect = this.canvas.getBoundingClientRect();
+
+        const selectionRectangle = {
+        	x: x + selectionOffset,
+        	y: (y + rect.top + (yPos * this.line_height) + this.GetHeight(this.ctx) / 2 - this.GetHeight(this.ctx) + 1) - 5,
+        	w: selectionWidth,
+        	h: selectionHeight
+        }
+
+        console.log("[-] drawSelection, selectionRectangle: ", selectionRectangle);
+
+        this.ctx.globalAlpha = 0.2;
+        // ctx.fillStyle = "#00000";
+        this.ctx.fillRect(selectionRectangle.x, selectionRectangle.y, selectionRectangle.w, selectionRectangle.h);
+   		this.ctx.globalAlpha = 1.0;
+    }
 
 	render() {
 		this.swapBuffers();
@@ -229,8 +298,9 @@ class Engine {
 	}
 
 	GetHeight(font, text = null) {
+		console.log('this.ctxs[font].font.split("px"): ', this.ctxs[font].font.split(" ")[1].split("px")[0]);
 		// Text is not supported yet
-		return this.ctxs[font].font.split("px")[0];
+		return this.ctxs[font].font.split(" ")[1].split("px")[0];
 	}
 
 	SetBold(value) {
@@ -292,6 +362,38 @@ class Engine {
 
 	    return pos;
  	}
+
+ 	textSelection(x, y) {
+        const curPos = this.clickPos(x, y) - this.active_string.length;
+        const start = Math.min(selectionStart, curPos);
+        const end = Math.max(selectionStart, curPos);
+
+        if (selection[0] != start || selection[1] != end) {
+            const selectionDest = [start, end];
+            const selection = {
+            	start: start,
+            	end: end,
+            	pos: stringPos,
+            	y: this.active_string_pos
+            }
+
+            console.log("selection: ", selection);
+
+            const p = selectionArr.findIndex(x => x.pos === stringPos && x.y === this.active_string_pos);
+
+            console.log("p: ", p);
+    
+            if(p >= 0) {
+                // int i = std::distance(selectionArr.begin(), p);
+                selectionArr[p].start = start;
+                selectionArr[p].end = end;
+            } else {
+                selectionArr.push(selection);
+            }
+
+            console.log("selectionArr: ", selectionArr);
+        }
+    }
 }
 
 function intersect(a, b) {
