@@ -6,12 +6,8 @@ window.addEventListener("load", (() => {
 	const canvas = document.getElementById("editor");
 	const ctx = document.getElementById("editor").getContext('2d');
 
-	console.log("ctx.font: ", ctx.font);
-
 	canvas.width = canvas.clientWidth;
 	canvas.height = canvas.clientHeight;
-
-	ctx.font = "Bold 21px Arial";
 
 	engine = new Engine(canvas, ctx);
 
@@ -33,8 +29,8 @@ window.addEventListener("load", (() => {
 			if (currentTick != lastTick) {
 				// console.log(`[-] FPS: ${Math.round(fps)}`);
 				// ctx.clearRect(0, 0, canvas.width, canvas.height);
-				// ctx.font = "bold 14px Arial";
-				// ctx.fillText("Debug information: FPS = " + Math.round(fps), 10, 20);
+				ctx.font = "14px Arial";
+				ctx.fillText("Debug information: FPS = " + Math.round(fps), 10, 20);
 			}
 		}
 	}
@@ -68,10 +64,17 @@ class Engine {
 
 	initEventHandlers() {
 		document.addEventListener('click', (event) => {
-			console.log("[-] initEventHandlers, event.clientY: " + event.clientY);
-			this.active_string_pos = Math.floor(event.clientY / (this.line_height + this.margin));
+			this.active_string_pos = Math.round((event.clientY - this.margin) / this.line_height) - 1;
 			console.log(`[-] initEventHandlers, click Event, active_string_pos: ${this.active_string_pos}`);
 			this.pos = this.clickPos(event.offsetX - this.margin, event.offsetY + this.margin) - this.active_string.length;
+			// console.log(`[-] initEventHandlers, pos: ${this.pos}`);
+			if (doSelection) {
+				doSelection = false;
+				selectionArr = [];
+			}
+		});
+
+		document.addEventListener('long-press', (event) => {	
 			if (doSelection) {
 				doSelection = false;
 				selectionArr = [];
@@ -81,7 +84,6 @@ class Engine {
 			if (doSelection) { 
                 selectionStart = this.clickPos(event.offsetX - this.margin, event.offsetY + this.margin) - this.active_string.length;
             }
-			console.log(`[-] initEventHandlers, pos: ${this.pos}`);
 		});
 
 		document.addEventListener('mousemove', (event) => {
@@ -98,7 +100,7 @@ class Engine {
 
 		  	if (stringPos < 0) stringPos = 0;
 
-		  	console.log("stringPos: " + stringPos);
+		  	// console.log("stringPos: " + stringPos);
 
 		  	// Add letter to string in array
 		  	if (!event.ctrlKey && typeof keyName !== "undefined") {
@@ -121,18 +123,23 @@ class Engine {
 
 	            const index = this.strings.findIndex(x => x.pos === stringPos && x.y === this.active_string_pos);
 
-	            console.log("index: ", index);
-
 			  	if (index < 0) {
 			  		this.strings.push(myText);
 			  	}
 			  	if (keyName.length === 1 && !this.pos) {
 			  		this.strings[index].text ?
 			  		this.strings[index].text += keyName : this.strings[index].text = keyName;
+
+			  		const textWidth = this.GetWidth(this.strings[index].text);
+		            if (textWidth + this.margin * 2 >= this.canvas.width - this.margin) {
+		            	this.active_string_pos += 1;
+		            	console.log("this.active_string_pos: ", this.active_string_pos);
+		            	return false;
+		            }
 			  	}
-			  	else if (keyName.length === 1 && this.pos) this.strings[this.active_string_pos].text = 
-			  		insert(this.strings[this.active_string_pos].text, this.pos + this.active_string.length, keyName);
-			  	console.log("strings: ", this.strings);
+			  	else if (keyName.length === 1 && this.pos) this.strings[index].text = 
+			  		insert(this.strings[index].text, this.pos + this.active_string.length, keyName);
+			  	// console.log("strings: ", this.strings);
 			}
 
 			if (event.keyCode == '38') {
@@ -148,7 +155,8 @@ class Engine {
 		       	this.pos += 1;
 		    }
 		    else if (event.keyCode == '8') {
-				this.strings[this.active_string_pos].text = remove_character(this.strings[this.active_string_pos].text, this.strings[this.active_string_pos].text.length + this.pos - 1);
+		    	const index = this.strings.findIndex(x => x.pos === stringPos && x.y === this.active_string_pos);
+				this.strings[index].text = remove_character(this.strings[index].text, this.strings[index].text.length + this.pos - 1);
 		    } else if (event.keyCode == '13') {
 		    	this.active_string_pos += 1;
 		    } else if (event.ctrlKey && event.key === 'b') {
@@ -177,7 +185,7 @@ class Engine {
 			h: h
 		}
 
-		if (message.text.length) {;
+		if (message.text.length) {
 			this.ctx.font = (message.isBold ? "bold " : "") + message.fontSize + " " + message["font-family"];
 			if (!this.ctxs.includes(this.ctx)) {
 				this.ctxs[this.ctx] = this.ctx;
@@ -196,13 +204,13 @@ class Engine {
 
 	        if (doSelection) {
 	        	for (let el in selectionArr) {
-                	console.log("i = " + " [ " + selectionArr[el].start + ", " + selectionArr[el].end + " ] ");
-                	console.log("y = " + selectionArr[el].y);
+                	// console.log("i = " + " [ " + selectionArr[el].start + ", " + selectionArr[el].end + " ] ");
+                	// console.log("y = " + selectionArr[el].y);
                 	const selection = [ selectionArr[el].start, selectionArr[el].end ];
                 	try {
-                		this.drawSelection(m_Destination.y, m_textDestination.x, selectionArr[el].y, selection);
+                		if (selectionArr[el].pos === message.pos && selectionArr[el].y === message.y) this.drawSelection(m_textDestination.y, m_textDestination.x, selectionArr[el].y, selection);
                 	} catch (e) {
-                		console.log("Error: " + e);
+                		// console.log("Error: " + e);
                 	}
             	}
 	        }
@@ -235,11 +243,9 @@ class Engine {
 
 	drawSelection(y, x, yPos, selection) 
     {
-    	console.log("yPos: ", yPos);
-
         const selectionString = this.strings.find(x => x.pos === stringPos && x.y === yPos).text;
 
-        console.log("selectionString: ", selectionString);
+        // console.log("selectionString: ", selectionString);
 
         const text = selectionString.substr(selection[0] + selectionString.length - 1);
 
@@ -257,17 +263,21 @@ class Engine {
 
         const selectionRectangle = {
         	x: x + selectionOffset,
-        	y: (y + rect.top + (yPos * this.line_height) + this.GetHeight(this.ctx) / 2 - this.GetHeight(this.ctx) + 1) - 5,
+        	y: y - this.GetHeight(this.ctx),
         	w: selectionWidth,
         	h: selectionHeight
         }
 
-        console.log("[-] drawSelection, selectionRectangle: ", selectionRectangle);
+        // console.log("[-] drawSelection, selectionRectangle: ", selectionRectangle);
+
+        this.ctx.save()
 
         this.ctx.globalAlpha = 0.2;
-        // ctx.fillStyle = "#00000";
+        this.ctx.fillStyle = "#2980b9";
         this.ctx.fillRect(selectionRectangle.x, selectionRectangle.y, selectionRectangle.w, selectionRectangle.h);
    		this.ctx.globalAlpha = 1.0;
+
+   		this.ctx.restore();
     }
 
 	render() {
@@ -298,9 +308,8 @@ class Engine {
 	}
 
 	GetHeight(font, text = null) {
-		console.log('this.ctxs[font].font.split("px"): ', this.ctxs[font].font.split(" ")[1].split("px")[0]);
 		// Text is not supported yet
-		return this.ctxs[font].font.split(" ")[1].split("px")[0];
+		return this.ctxs[font].font.match(/([\d.]+)*px/)[1];
 	}
 
 	SetBold(value) {
@@ -312,7 +321,7 @@ class Engine {
 	}
 
 	clickPos(x, y) {
-		console.log("x: ", x);
+		// console.log("x: ", x);
 
 		let length = 0;
 		this.strings.forEach((string) => {
@@ -326,7 +335,6 @@ class Engine {
 
 		for (let string of this.strings) {
 			if (string.x >= x - 0) {
-				console.log(true);
 				guess_string_pos = string.pos - 1;
 			    break;
 			}
@@ -337,8 +345,8 @@ class Engine {
 			}
 		};
 
-		console.log("[-] clickPos, Guessed string_pos (pls work): " + guess_string_pos);
-		console.log("[-] clickPos, string_xPos: " + string_xPos);
+		// console.log("[-] clickPos, Guessed string_pos (pls work): " + guess_string_pos);
+		// console.log("[-] clickPos, string_xPos: " + string_xPos);
 
 		stringPos = guess_string_pos;
 
@@ -364,9 +372,14 @@ class Engine {
  	}
 
  	textSelection(x, y) {
+ 		this.active_string_pos = Math.round((event.clientY - this.margin) / this.line_height) - 1;
+
         const curPos = this.clickPos(x, y) - this.active_string.length;
         const start = Math.min(selectionStart, curPos);
         const end = Math.max(selectionStart, curPos);
+
+        if (stringPos < 0) stringPos = 0;
+        if (this.active_string_pos < 0) this.active_string_pos = 0;
 
         if (selection[0] != start || selection[1] != end) {
             const selectionDest = [start, end];
@@ -377,11 +390,9 @@ class Engine {
             	y: this.active_string_pos
             }
 
-            console.log("selection: ", selection);
-
             const p = selectionArr.findIndex(x => x.pos === stringPos && x.y === this.active_string_pos);
 
-            console.log("p: ", p);
+            // console.log("p: ", p);
     
             if(p >= 0) {
                 // int i = std::distance(selectionArr.begin(), p);
@@ -392,6 +403,7 @@ class Engine {
             }
 
             console.log("selectionArr: ", selectionArr);
+            console.log("strings: ", this.strings);
         }
     }
 }

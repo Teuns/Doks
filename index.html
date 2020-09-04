@@ -2,11 +2,13 @@
 <html>
   	<head>
 	    <meta charset="UTF-8">
+	    <meta name="viewport" content="width=device-width, initial-scale=1">
 	    <title>Doks: Word Processor</title>
 	    <link rel="stylesheet" href="src/editor.css">
+	    <script src="src/long-press-event.min.js" type="text/javascript"></script>
   	</head>
   	<body>
-  		<canvas id="editor"></canvas>
+  		<canvas id="editor" data-long-press-delay="100"></canvas>
 		<script src="src/editor.js" type="text/javascript"></script>
 	</body>
 </html>
