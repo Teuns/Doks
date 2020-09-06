@@ -1,0 +1,4 @@
+dist/*
+!dist/icon-256x256.png
+!dist/manifest.json
+node_modules/

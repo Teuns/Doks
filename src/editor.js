@@ -1,6 +1,10 @@
+import "./editor.css";
+import "./long-press-event.min.js";
+
 const maxFPS = 1000 / 60;
 let lastTick = performance.now();
 let fps = 0;
+let frameCounter = 0;
 
 window.addEventListener("load", (() => {
 	const canvas = document.getElementById("editor");
@@ -9,16 +13,21 @@ window.addEventListener("load", (() => {
 	canvas.width = canvas.clientWidth;
 	canvas.height = canvas.clientHeight;
 
-	engine = new Engine(canvas, ctx);
+	const engine = new Engine(canvas, ctx);
 
-	loop = function() {
+	const loop = function() {
 		requestAnimationFrame(loop);
 
 		const currentTick = performance.now();
 
 		const delta = currentTick - lastTick;
 
-		fps = Math.round(1000 / (delta / 1));
+		frameCounter++;
+
+		if (frameCounter == 60) {
+			fps = Math.round(1000 / (delta / 1));
+			frameCounter = 0;
+		}
 
 		lastTick = currentTick - (delta % maxFPS);
 
@@ -28,9 +37,11 @@ window.addEventListener("load", (() => {
 			// Show FPS
 			if (currentTick != lastTick) {
 				// console.log(`[-] FPS: ${Math.round(fps)}`);
-				// ctx.clearRect(0, 0, canvas.width, canvas.height);
+				ctx.save();
 				ctx.font = "14px Arial";
-				ctx.fillText("Debug information: FPS = " + Math.round(fps), 10, 20);
+				ctx.fillStyle = "#a8a8a8";
+				ctx.fillText("Debug information: BuildId: " + __BUILDID__ + " FPS = " + Math.round(fps) + ", document length: " + engine.GetxPos().string.length, 10, 20);
+				ctx.restore();
 			}
 		}
 	}
@@ -44,7 +55,7 @@ let stringPos = 0;
 let selection = [ 0, 0 ];
 let selectionArr = new Array();
 let doSelection = false;
-selectionStart = 0;
+let selectionStart = 0;
 
 class Engine {
 	constructor(canvas, ctx) {
@@ -65,6 +76,7 @@ class Engine {
 	initEventHandlers() {
 		document.addEventListener('click', (event) => {
 			this.active_string_pos = Math.round((event.clientY - this.margin) / this.line_height) - 1;
+			if (this.active_string_pos < 0) this.active_string_pos = 0;
 			console.log(`[-] initEventHandlers, click Event, active_string_pos: ${this.active_string_pos}`);
 			this.pos = this.clickPos(event.offsetX - this.margin, event.offsetY + this.margin) - this.active_string.length;
 			// console.log(`[-] initEventHandlers, pos: ${this.pos}`);
@@ -99,23 +111,17 @@ class Engine {
 		  	const keyName = event.key;
 
 		  	if (stringPos < 0) stringPos = 0;
-
 		  	// console.log("stringPos: " + stringPos);
 
 		  	// Add letter to string in array
 		  	if (!event.ctrlKey && typeof keyName !== "undefined") {
 		  		let x = 0;
-		  		this.strings.forEach((string) => {
-		  			if (string.y === this.active_string_pos) {
-		  				x += this.GetWidth(string.text) + (10 + parseInt(string.fontSize.split("px")[0]) + 10);
-		  			}
-		  		});
 
-		  		const myText = {
+		  		const text = {
 	              	"font-family": "Arial",
 	              	"fontSize": "16px",
 	              	"pos": stringPos,
-	              	"x": x,
+	              	"x": 0,
 	              	"y": this.active_string_pos,
 	              	"text": "",
 	              	"isBold": isBold
@@ -124,21 +130,24 @@ class Engine {
 	            const index = this.strings.findIndex(x => x.pos === stringPos && x.y === this.active_string_pos);
 
 			  	if (index < 0) {
-			  		this.strings.push(myText);
+			  		text.x = this.GetxPos().x;
+			  		this.strings.push(text);
 			  	}
 			  	if (keyName.length === 1 && !this.pos) {
 			  		this.strings[index].text ?
 			  		this.strings[index].text += keyName : this.strings[index].text = keyName;
-
-			  		const textWidth = this.GetWidth(this.strings[index].text);
+			  		const _string = this.GetxPos().string;
+			  		const textWidth = this.GetWidth(_string);
 		            if (textWidth + this.margin * 2 >= this.canvas.width - this.margin) {
 		            	this.active_string_pos += 1;
+		            	stringPos = 0;
 		            	console.log("this.active_string_pos: ", this.active_string_pos);
 		            	return false;
 		            }
 			  	}
 			  	else if (keyName.length === 1 && this.pos) this.strings[index].text = 
 			  		insert(this.strings[index].text, this.pos + this.active_string.length, keyName);
+			  	
 			  	// console.log("strings: ", this.strings);
 			}
 
@@ -177,6 +186,22 @@ class Engine {
 	    });
 	}
 
+	GetxPos() {
+		this.ctx.save();
+		let x = 0;
+		let _string = "";
+		this.strings.forEach((string) => {
+	  		if (string.y === this.active_string_pos) {
+	  			this.ctx.font = (string.isBold ? "bold " : "") + string.fontSize + " " + string["font-family"];
+	  			x += this.GetWidth(string.text);
+	  			if (string.pos === 0) x += this.margin;
+	  			_string += string.text;
+	  		}
+	  	});
+	  	this.ctx.restore();
+	  	return { x: x, string: _string };
+	}
+
 	draw(message, x, y, w, h, caret = false) {
 		let m_Destination = {
 			x: x,
@@ -196,7 +221,7 @@ class Engine {
             const textHeight = this.GetHeight(this.ctx, message.text);
 
             let m_textDestination = {
-            	x: m_Destination.x + 10,
+            	x: m_Destination.x,
             	y: m_Destination.y + textHeight / 2,
             	w: textWidth,
             	h: textHeight
@@ -227,13 +252,13 @@ class Engine {
 	                        w = this.GetWidth(letter);
 	                        h = this.GetHeight(this.ctx, letter);
 	                        if (m_Destination.w > textWidth) {
-	                        	this.ctx.fillRect(x + textWidth - w + 10, i + this.GetHeight(this.ctx) / 2 - this.GetHeight(this.ctx) + 1, 1, 1);
+	                        	this.ctx.fillRect(x + textWidth - w , i + this.GetHeight(this.ctx) / 2 - this.GetHeight(this.ctx) + 1, 1, 1);
 	                        }
 	                } else {
 	                    if (this.active_string.length && m_Destination.w < textWidth) {
 	                    	this.ctx.fillRect(x + m_Destination.w - 5, i + this.GetHeight(this.ctx) / 2 - this.GetHeight(this.ctx) + 1, 1, 1);
 	                    } else {
-	                    	this.ctx.fillRect(x + textWidth + 10, i + this.GetHeight(this.ctx) / 2 - this.GetHeight(this.ctx) + 1, 1, 1);
+	                    	this.ctx.fillRect(x + textWidth, i + this.GetHeight(this.ctx) / 2 - this.GetHeight(this.ctx) + 1, 1, 1);
 	                    }
 	                }
 	            }
@@ -299,7 +324,7 @@ class Engine {
 
 		this.strings.forEach((string, i) => {
 			if (string.y === this.active_string_pos && string.pos === stringPos) this.active_string = string.text;
-			this.draw(string, 0 + this.margin + string.x, rect.top + (string.y * this.line_height) + this.margin, this.canvas.width, this.line_height, string.y == this.active_string_pos && string.pos == stringPos);
+			this.draw(string, string.pos === 0 ? this.margin + string.x : string.x, rect.top + (string.y * this.line_height) + this.margin, this.canvas.width, this.line_height, string.y == this.active_string_pos && string.pos == stringPos);
 		});
 	}
 
@@ -334,7 +359,7 @@ class Engine {
 		let string_xPos = 0;
 
 		for (let string of this.strings) {
-			if (string.x >= x - 0) {
+			if (string.y == this.active_string_pos && string.x >= x - 0) {
 				guess_string_pos = string.pos - 1;
 			    break;
 			}
@@ -345,7 +370,7 @@ class Engine {
 			}
 		};
 
-		// console.log("[-] clickPos, Guessed string_pos (pls work): " + guess_string_pos);
+		console.log("[-] clickPos, Guessed string_pos (pls work): " + guess_string_pos);
 		// console.log("[-] clickPos, string_xPos: " + string_xPos);
 
 		stringPos = guess_string_pos;
