@@ -5,51 +5,63 @@ const maxFPS = 1000 / 60;
 let lastTick = performance.now();
 let fps = 0;
 let frameCounter = 0;
+let oldHeight = 0;
 
 window.addEventListener("load", (() => {
-	const canvas = document.getElementById("editor");
-	const ctx = document.getElementById("editor").getContext('2d');
+	const canvasEls = document.querySelectorAll("#editor");
+	canvasEls.forEach((canvas) => {
+		const ctx = canvas.getContext('2d');
 
-	canvas.width = canvas.clientWidth;
-	canvas.height = canvas.clientHeight;
+		canvas.width = canvas.clientWidth;
+		canvas.height = canvas.parentNode.clientHeight * 2;
+		canvas.style.height = canvas.height + 'px';
+		oldHeight = canvas.height;
 
-	const engine = new Engine(canvas, ctx);
+		const engine = new Engine(canvas, ctx);
 
-	const loop = function() {
-		requestAnimationFrame(loop);
+		const loop = function() {
+			requestAnimationFrame(loop);
 
-		const currentTick = performance.now();
+			const currentTick = performance.now();
 
-		const delta = currentTick - lastTick;
+			const delta = currentTick - lastTick;
 
-		frameCounter++;
+			frameCounter++;
 
-		if (frameCounter == 60) {
-			fps = Math.round(1000 / (delta / 1));
-			frameCounter = 0;
-		}
+			if (frameCounter == 60) {
+				fps = Math.round(1000 / (delta / 1));
+				frameCounter = 0;
+			}
 
-		lastTick = currentTick - (delta % maxFPS);
+			lastTick = currentTick - (delta % maxFPS);
 
-		if (delta > maxFPS) {
-			engine.render();
+			if (delta > maxFPS) {
+				engine.render();
 
-			// Show FPS
-			if (currentTick != lastTick) {
-				// console.log(`[-] FPS: ${Math.round(fps)}`);
-				ctx.save();
-				ctx.font = "14px Arial";
-				ctx.fillStyle = "#a8a8a8";
-				ctx.fillText("Debug information: BuildId: " + __BUILDID__ + " FPS = " + Math.round(fps) + ", document length: " + engine.GetxPos().string.length, 10, 20);
-				ctx.restore();
+				// Show FPS
+				if (currentTick != lastTick) {
+					// console.log(`[-] FPS: ${Math.round(fps)}`);
+					ctx.save();
+					ctx.font = "14px Arial";
+					ctx.fillStyle = "#a8a8a8";
+					ctx.fillText("Debug information: BuildId: " + __BUILDID__ + " FPS = " + Math.round(fps) + ", document length: " + engine.GetxPos().string.length, 10, 30);
+					ctx.restore();
+					
+					// ctx.beginPath();
+					// ctx.lineTo(0, 10);
+					// ctx.lineTo(200, 10);
+					// ctx.stroke();
+				}
 			}
 		}
-	}
 
-	loop();
+		loop();
+	});
 }));	
 
-let isBold = false;
+let m_copiedText = "";
+let fontFamily = "Arial";
+let fontSize = "16px";
 let stringPos = 0;
 
 let selection = [ 0, 0 ];
@@ -71,40 +83,52 @@ class Engine {
 		this.pos = 0;
 		this.active_string = "";
 		this.messages = [];
+		this.isBold = false;
 	}
 
 	initEventHandlers() {
-		document.addEventListener('click', (event) => {
-			this.active_string_pos = Math.round((event.clientY - this.margin) / this.line_height) - 1;
+		window.addEventListener("scroll", () => {
+			// this.canvas.style.top = -window.scrollY + 'px';
+		});
+
+		this.canvas.addEventListener('click', (event) => {
+			const rect = this.canvas.getBoundingClientRect();
+			if (Math.round((event.offsetY - rect.top - this.margin) / this.line_height) < ((this.canvas.clientHeight - this.margin * 2) / this.line_height))
+				this.active_string_pos = Math.round((event.offsetY - rect.top - this.margin) / this.line_height);
 			if (this.active_string_pos < 0) this.active_string_pos = 0;
 			console.log(`[-] initEventHandlers, click Event, active_string_pos: ${this.active_string_pos}`);
 			this.pos = this.clickPos(event.offsetX - this.margin, event.offsetY + this.margin) - this.active_string.length;
 			// console.log(`[-] initEventHandlers, pos: ${this.pos}`);
+			selectionStart = this.clickPos(event.offsetX - this.margin, event.offsetY + this.margin) - this.active_string.length;
 			if (doSelection) {
 				doSelection = false;
 				selectionArr = [];
 			}
 		});
 
-		document.addEventListener('long-press', (event) => {	
+		this.canvas.addEventListener('long-press', (event) => {	
 			if (doSelection) {
 				doSelection = false;
 				selectionArr = [];
 			} else {
 				doSelection = true;
 			}
-			if (doSelection) { 
-                selectionStart = this.clickPos(event.offsetX - this.margin, event.offsetY + this.margin) - this.active_string.length;
-            }
 		});
 
-		document.addEventListener('mousemove', (event) => {
+		this.canvas.addEventListener('mousemove', (event) => {
 			if (event.target === this.canvas) {
 				document.body.style.cursor = 'text';
 
-				if (doSelection) this.textSelection(event.offsetX - this.margin, event.offsetY + this.margin);
+				if (doSelection) {
+					const rect = this.canvas.getBoundingClientRect();
+					this.active_string_pos = Math.round((event.offsetY - rect.top - this.margin) / this.line_height);
+
+					this.textSelection(event.offsetX - this.margin, event.offsetY + this.margin);
+				}
 			}
 		});
+
+		const self = this;
 
 		document.addEventListener('keydown', (event) => {
 			// console.log("[-] initEventHandlers keyup event: ", event);
@@ -118,13 +142,13 @@ class Engine {
 		  		let x = 0;
 
 		  		const text = {
-	              	"font-family": "Arial",
-	              	"fontSize": "16px",
+	              	"font-family": fontFamily,
+	              	"fontSize": fontSize,
 	              	"pos": stringPos,
 	              	"x": 0,
 	              	"y": this.active_string_pos,
 	              	"text": "",
-	              	"isBold": isBold
+	              	"isBold": this.isBold
 	            };
 
 	            const index = this.strings.findIndex(x => x.pos === stringPos && x.y === this.active_string_pos);
@@ -133,12 +157,13 @@ class Engine {
 			  		text.x = this.GetxPos().x;
 			  		this.strings.push(text);
 			  	}
-			  	if (keyName.length === 1 && !this.pos) {
+			  	if (keyName.length === 1 && !this.pos && index >= 0) {
 			  		this.strings[index].text ?
 			  		this.strings[index].text += keyName : this.strings[index].text = keyName;
 			  		const _string = this.GetxPos().string;
 			  		const textWidth = this.GetWidth(_string);
 		            if (textWidth + this.margin * 2 >= this.canvas.width - this.margin) {
+		            	console.log(true);
 		            	this.active_string_pos += 1;
 		            	stringPos = 0;
 		            	console.log("this.active_string_pos: ", this.active_string_pos);
@@ -159,29 +184,76 @@ class Engine {
 		    }
 		    else if (event.keyCode == '37') {
 		       	this.pos -= 1;
+		       	if (this.pos === -this.active_string.length - 1) {
+		       		stringPos--;
+		       		this.pos = 0;
+		       	}
 		    }
 		    else if (event.keyCode == '39') {
 		       	this.pos += 1;
+		       	if (this.pos === 0) {
+		       		stringPos++;
+		       		this.pos = -this.active_string.length - 1;
+		       	}
 		    }
 		    else if (event.keyCode == '8') {
 		    	const index = this.strings.findIndex(x => x.pos === stringPos && x.y === this.active_string_pos);
 				this.strings[index].text = remove_character(this.strings[index].text, this.strings[index].text.length + this.pos - 1);
 		    } else if (event.keyCode == '13') {
+		    	if (this.active_string_pos >= (((this.canvas.parentNode.clientHeight * pages) - this.margin * 2) / this.line_height) - 2) 
+		    		this.canvas.parentNode.scrollTo(this.canvas.parentNode.scrollTop, this.canvas.parentNode.scrollTop + this.line_height / 2);
+
+		    	if (this.active_string_pos >= ((this.canvas.clientHeight - this.margin * 2) / this.line_height))
+				{
+					console.log("Reached end of page");
+				}
+
 		    	this.active_string_pos += 1;
+		    	const text = {
+	              	"font-family": fontFamily,
+	              	"fontSize": fontSize,
+	              	"pos": stringPos,
+	              	"x": 0,
+	              	"y": this.active_string_pos,
+	              	"text": " ",
+	              	"isBold": this.isBold
+	            };
+	            this.strings.push(text);
+	            this.pos = -1;
 		    } else if (event.ctrlKey && event.key === 'b') {
-		    	stringPos++;
-		    	if (!isBold) {
+		    	if (!this.isBold) {
 		    		this.SetBold(true);
 		    		}
 		    	else {
 		    		this.SetBold(false);
 		    	}
+		 	} else if (event.ctrlKey && event.key === 'c') {
+		 		this.copyText();
+		 	} else if (event.ctrlKey && event.key == 'v') {
+		 		// alert("This is not supported in FireFox. Sorry for the inconvience.");
+		 		const index = this.strings.findIndex(x => x.pos === stringPos && x.y === this.active_string_pos);
+				this.strings[index].text += m_copiedText;
 		 	}
 
 			event.preventDefault();
 		});
 
-		document.addEventListener('keydown', (event) => {
+		document.getElementById('SetBold').addEventListener('click', function(e) {
+			alert("SetBold");
+	    	self.SetBold(e.target.checked);
+		});
+
+		document.getElementById('fontSize').addEventListener('change', function(e) {
+			const size = e.target.options[e.target.selectedIndex].value;
+			self.SetFontSize(size);
+    	});
+
+    	document.getElementById('fontFamily').addEventListener('change', function(e) {
+			const font = e.target.options[e.target.selectedIndex].value;
+			self.SetFontFamily(font);
+    	}); 
+
+    	document.addEventListener('keydown', (event) => {
 	        event.preventDefault();
 	    });
 	}
@@ -189,6 +261,7 @@ class Engine {
 	GetxPos() {
 		this.ctx.save();
 		let x = 0;
+		let h = 0;
 		let _string = "";
 		this.strings.forEach((string) => {
 	  		if (string.y === this.active_string_pos) {
@@ -197,9 +270,10 @@ class Engine {
 	  			if (string.pos === 0) x += this.margin;
 	  			_string += string.text;
 	  		}
+	  		h += parseInt(string.fontSize.split("px")[0]);
 	  	});
 	  	this.ctx.restore();
-	  	return { x: x, string: _string };
+	  	return { x: x, h: h, string: _string };
 	}
 
 	draw(message, x, y, w, h, caret = false) {
@@ -322,6 +396,13 @@ class Engine {
 
 		this.strings.sort(compare);
 
+		for (let i = 0; i < pages; i++) {
+			this.ctx.beginPath();
+			this.ctx.lineTo(0, (oldHeight / i));
+			this.ctx.lineTo(this.canvas.width, (oldHeight / i));
+			this.ctx.stroke();
+		}
+
 		this.strings.forEach((string, i) => {
 			if (string.y === this.active_string_pos && string.pos === stringPos) this.active_string = string.text;
 			this.draw(string, string.pos === 0 ? this.margin + string.x : string.x, rect.top + (string.y * this.line_height) + this.margin, this.canvas.width, this.line_height, string.y == this.active_string_pos && string.pos == stringPos);
@@ -338,7 +419,18 @@ class Engine {
 	}
 
 	SetBold(value) {
-		isBold = value;
+		this.isBold = value;
+		stringPos++;
+	}
+
+	SetFontFamily(font) {
+		fontFamily = font;
+		stringPos++;
+	}
+
+	SetFontSize(size) {
+		fontSize = size;
+		stringPos++;
 	}
 
 	swapBuffers() {
@@ -397,8 +489,6 @@ class Engine {
  	}
 
  	textSelection(x, y) {
- 		this.active_string_pos = Math.round((event.clientY - this.margin) / this.line_height) - 1;
-
         const curPos = this.clickPos(x, y) - this.active_string.length;
         const start = Math.min(selectionStart, curPos);
         const end = Math.max(selectionStart, curPos);
@@ -431,6 +521,30 @@ class Engine {
             console.log("strings: ", this.strings);
         }
     }
+
+    copyText() {
+    	function sortByY(a, b) {
+		  return a.y < b.y;
+		}
+
+        if (doSelection && this.active_string.length) {
+            selectionArr.sort(sortByY);
+
+            let copiedText = "";
+            for (let el in selectionArr) {
+            	const selection = [ selectionArr[el].start, selectionArr[el].end ];
+
+                const text = this.strings[selectionArr[el].y].text.substr(selection[0] + this.active_string.length - 1);
+
+                copiedText += text.substr(0, selection[1] + text.length);
+            }
+
+           	console.log("[debug copyText] text: " + copiedText);
+
+           	m_copiedText = copiedText;
+            navigator.clipboard.writeText(copiedText);
+        }
+    }
 }
 
 function intersect(a, b) {
@@ -446,7 +560,7 @@ function insert(str, index, value) {
 
 function remove_character(str, char_pos) 
 {
-  	part1 = str.substring(0, char_pos);
-  	part2 = str.substring(char_pos + 1, str.length);
+  	const part1 = str.substring(0, char_pos);
+  	const part2 = str.substring(char_pos + 1, str.length);
   	return (part1 + part2);
 }

@@ -1,11 +1,43 @@
+html, body {
+	height: 100%;
+}
+
 body {
+	display: grid;
 	width: 50%;
+	margin-top:	   0;
+	margin-bottom: 0;
 	margin-left:  auto;
 	margin-right: auto;
 }
 
+.editor-container {
+	max-width: 210mm;
+	max-height: 297mm;
+	height: 100%;
+	overflow: scroll;
+	box-shadow: 0px 0px 2px 0px #888;
+}
+
 canvas#editor {
-    width: 210mm;
-	height: 297mm;
-	box-shadow: 0px 1px 5px 0px #ccc;
+	position: relative;
+    width: 100%;
+	height: 100%;
+}
+
+@media screen and (max-width: 800px) {
+	body {
+		width: 100%;
+		margin: 0;
+	}
+
+	canvas#editor {
+		position: absolute;
+		left: 0;
+		right: 0;
+		top: 0;
+		bottom: 0;
+		width: 100%;
+		height: 100%;
+	}
 }

@@ -6,6 +6,40 @@
 	    <title>Doks: Word Processor</title>
   	</head>
   	<body>
-  		<canvas id="editor" data-long-press-delay="100"></canvas>
+  		<div class="toolbar">
+	  		<input type="checkbox" id="SetBold">B</button>
+	  		
+	  		<select id="fontSize">
+			  	<option value="12px">12</option>
+			  	<option value="14px">14</option>
+			  	<option value="16px" selected>16</option>
+			  	<option value="18px">18</option>
+			</select>
+
+			<select id="fontFamily">
+			  	<option value="Arial" selected>Arial</option>
+		        <option value="Helvetica">Helvetica</option>
+		        <option value="Times New Roman">Times New Roman</option>
+		        <option value="Sans serif">Sans serif</option>
+		        <option value="Courier New">Courier New</option>
+		        <option value="Verdana">Verdana</option>
+		        <option value="Georgia">Georgia</option>
+		        <option value="Palatino">Palatino</option>
+		        <option value="Garamond">Garamond</option>
+		        <option value="Comic Sans MS">Comic Sans MS</option>
+		        <option value="Arial Black">Arial Black</option>
+		        <option value="Tahoma">Tahoma</option>
+		        <option value="Comic Sans MS">Comic Sans MS</option>
+			</select>
+
+			<div>
+				<p>This is a Canvas based text editor. It contains bugs and many functionality hasn't been implemented yet.</p>
+				<p>The bold button for example does not work perfectly, whilst ctrl + b does.</p>
+			</div>
+		</div>
+
+  		<div class="editor-container">
+  			<canvas id="editor" data-long-press-delay="100"></canvas>
+  		</div>
 	</body>
 </html>
